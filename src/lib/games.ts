@@ -1,4 +1,9 @@
-import { eq, asc } from 'drizzle-orm';
+/**
+ * Injectable data-access helpers for querying games and their related
+ * categories and publishers.
+ */
+
+import { and, asc, eq, or } from 'drizzle-orm';
 import type { Database } from './db';
 import { games, categories, publishers } from '../../db/schema';
 import type { Game } from '../types/game';
@@ -50,20 +55,64 @@ function baseGamesQuery(db: Database) {
         .leftJoin(publishers, eq(games.publisherId, publishers.id));
 }
 
-/** All games ordered by title. */
+/**
+ * Retrieves all games ordered alphabetically by title.
+ * @param db - The database instance to query.
+ * @returns A promise resolving to all games with their related data.
+ */
 export async function getAllGames(db: Database): Promise<Game[]> {
     const rows = await baseGamesQuery(db).orderBy(asc(games.title));
     return rows.map(mapGame);
 }
 
-/** All game ids ordered by title. */
+/**
+ * Retrieves all game IDs ordered alphabetically by title.
+ * @param db - The database instance to query.
+ * @returns A promise resolving to the ordered game IDs.
+ */
 export async function getAllGameIds(db: Database): Promise<number[]> {
     const rows = await db.select({ id: games.id }).from(games).orderBy(asc(games.title));
     return rows.map((row) => row.id);
 }
 
-/** A single game by id, or null when it does not exist. */
+/**
+ * Retrieves a single game by ID.
+ * @param db - The database instance to query.
+ * @param id - The game ID to find.
+ * @returns A promise resolving to the game, or null when it does not exist.
+ */
 export async function getGameById(db: Database, id: number): Promise<Game | null> {
     const row = await baseGamesQuery(db).where(eq(games.id, id)).get();
     return row ? mapGame(row) : null;
+}
+
+/**
+ * Retrieves games matching the selected category and publisher filters.
+ * Multiple category IDs use OR semantics, while the publisher filter is exact.
+ * @param db - The database instance to query.
+ * @param categoryIds - Category IDs to match, or an empty array for no category filter.
+ * @param publisherId - Publisher ID to match, or null for no publisher filter.
+ * @returns A promise resolving to matching games ordered alphabetically by title.
+ */
+export async function getGamesByFilters(
+    db: Database,
+    categoryIds: number[],
+    publisherId: number | null,
+): Promise<Game[]> {
+    const filters = [];
+
+    if (categoryIds.length > 0) {
+        filters.push(or(...categoryIds.map((categoryId) => eq(games.categoryId, categoryId))));
+    }
+
+    if (publisherId !== null) {
+        filters.push(eq(games.publisherId, publisherId));
+    }
+
+    const query = baseGamesQuery(db);
+    const rows = filters.length > 0
+        ? await query.where(and(...filters)).orderBy(asc(games.title))
+        : await query.orderBy(asc(games.title));
+
+    return rows.map(mapGame);
 }

@@ -24,6 +24,36 @@ test.describe('Game Listing and Navigation', () => {
     });
   });
 
+  test('should filter games by category and publisher', async ({ page }) => {
+    await page.goto('/');
+    const visibleCards = page.locator('[data-testid="game-card"]:not([hidden])');
+    const totalGames = await visibleCards.count();
+
+    await test.step('Verify all games are initially visible', async () => {
+      expect(totalGames).toBeGreaterThan(0);
+      await expect(visibleCards).toHaveCount(totalGames);
+    });
+
+    await test.step('Filter by multiple categories', async () => {
+      await page.getByLabel('Strategy', { exact: true }).check();
+      await page.getByLabel('Puzzle', { exact: true }).check();
+      await expect(visibleCards).toHaveCount(8);
+      await expect(page.getByRole('status')).toHaveText('Showing 8 games');
+    });
+
+    await test.step('Combine category filters with a publisher filter', async () => {
+      await page.getByTestId('publisher-filter').selectOption({ label: 'CodeForge Studios' });
+      await expect(visibleCards).toHaveCount(2);
+      await expect(page.getByRole('status')).toHaveText('Showing 2 games');
+    });
+
+    await test.step('Clear all filters', async () => {
+      await page.getByTestId('clear-filters').click();
+      await expect(visibleCards).toHaveCount(totalGames);
+      await expect(page.getByRole('status')).toHaveText(`Showing ${totalGames} games`);
+    });
+  });
+
   test('should navigate to correct game details page when clicking on a game', async ({ page }) => {
     let gameId: string | null;
     let gameTitle: string | null;
